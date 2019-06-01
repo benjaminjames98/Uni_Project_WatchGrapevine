@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Watch Grapevine</title>
+</head>
+<body>
+
+<input type="button" value="Home" onclick="getPosts(null)"><br>
+
+<h1 id="h1-post"></h1>
+<div id="posts"></div>
+
+<h1 id="h1-replies">Replies</h1>
+<div id="replies"></div>
+
+<h1 id="h1-comment"></h1>
+<input id="name" placeholder="name"><br>
+<input id="text" placeholder="comment"><br>
+<input id="submit" type="button" value="submit" onclick="submitComment()"><br>
+
+<script>
+    // helper function
+    function el(a) {
+        return document.getElementById(a);
+    }
+
+    // this post and replies are currently being shown. null is for top-level
+    let id = null;
+
+    window.onload = function () {
+        setInterval(getPosts, 5000);
+        getPosts();
+    };
+
+    // responsible for refreshing posts and displaying them
+    // if passed a newId, changes the focus of the page
+    function getPosts(newId) {
+        if (newId !== undefined) id = newId;
+
+        // different headings for top level vs other posts
+        if (id === null) {
+            el('h1-post').innerHTML = 'Posts';
+            el('h1-replies').innerHTML = '';
+            el('h1-comment').innerHTML = 'Comment';
+        } else {
+            el('h1-post').innerHTML = 'Post';
+            el('h1-replies').innerHTML = 'Replies';
+            el('h1-comment').innerHTML = 'Reply';
+        }
+
+        if (id === null)
+            jsonGet('API/top_level_posts.php', displayPosts);
+        else jsonGet('API/post_info.php', displayPosts, `id=${id}`);
+
+        // responsible for displaying the posts. different mechanisms for replies from post_info and top_level_posts
+        function displayPosts(posts) {
+            if ('replies' in posts) {
+                // from post_info
+                displayArray(posts['posts'], el('posts'));
+                displayArray(posts['replies'], el('replies'));
+            } else {
+                // from top_level_posts
+                displayArray(posts, el('posts'));
+            }
+
+            function displayArray(posts, container) {
+                container.innerHTML = '';
+                posts.forEach((post) => displayPost(post, container));
+            }
+
+            // creates the code itself, and adds it to the container.
+            // I was using document API, but this was cleaner and shorter
+            function displayPost(post, container) {
+                container.innerHTML += `
+                ${post.name}<br>
+                ${post.date}<br>
+                ${post.text}<br>
+                likes: ${post.likes}<br>
+                <input type="button" value="view post" onclick="getPosts(${post.id})"><br>
+                <input type="button" value="like" onclick="submitLike(${post.id}, true)"><br>
+                <input type="button" value="dislike" onclick="submitLike(${post.id}, false)"><br>
+                <br>
+                `;
+            }
+        }
+    }
+
+    // Responsible for submitting comments/replies
+    function submitComment() {
+        let name = el('name').value.trim();
+        let text = el('text').value.trim();
+        jsonPOST('API/create_post.php', getPosts, `name=${name}&text=${text}&reply_to=${id}`);
+    }
+
+    // Responsible for submitting likes and dislikes
+    function submitLike(id, like) {
+        let url = like ? 'API/add_like.php' : 'API/remove_like.php';
+        jsonPOST(url, getPosts, `id=${id}`);
+    }
+
+    // All AJAX GET requests go through here
+    function jsonGet(url, fun, data) {
+        let xhr = new XMLHttpRequest();
+
+        data = typeof data === 'string' ? data : '';
+        xhr.open('GET', url + '?' + data);
+        xhr.send();
+
+        xhr.onload = function () {
+            fun(JSON.parse(xhr.response));
+        };
+    }
+
+    // All AJAX POST requests go through here
+    function jsonPOST(url, fun, data) {
+        let xhr = new XMLHttpRequest();
+
+        data = typeof data === 'string' ? data : '';
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+        xhr.send(data);
+
+        xhr.onload = function () {
+            fun();
+        };
+    }
+</script>
+
+</body>
+</html>
